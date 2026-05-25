@@ -20,7 +20,7 @@ from complaint_data import CATEGORIES, CATEGORY_QUESTIONS, get_dummy_answer, get
 from state_machine import (
     get_session, reset_session, UserSession,
     LANG_SELECT, CATEGORY_MENU, AWAITING_AI_INPUT, FAQ_LIST, FAQ_ANSWER,
-    COLLECT_USER_NAME, COLLECT_USER_DISTRICT, COLLECT_USER_TALUKA,
+    COLLECT_USER_NAME, COLLECT_USER_STATE, COLLECT_USER_OTHER_STATE,
     COLLECT_USER_VILLAGE, COLLECT_USER_CONTACT, COLLECT_USER_EMAIL,
     COLLECT_DESCRIPTION, COLLECT_OPPOSITE_NAME, COLLECT_OPPOSITE_ADDRESS,
     COLLECT_OPPOSITE_PHONE, COLLECT_OPPOSITE_EMAIL, COLLECT_MONETARY,
@@ -89,20 +89,45 @@ def send_whatsapp_message(to: str, text: str):
         return None
 
 
+def send_image_message(to: str, image_url: str):
+    """Send an image via WhatsApp API."""
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "image",
+        "image": {"link": image_url}
+    }
+    try:
+        response = requests.post(WHATSAPP_API_URL, headers=_api_headers(), json=payload)
+        response.raise_for_status()
+        print(f"✅ Image sent to {to}")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error sending image: {e}")
+        if e.response is not None:
+            print(f"   Response details: {e.response.text}")
+        return None
+
+
+
 def send_interactive_list(to: str, header: str, body: str, footer: str,
                           button: str, sections: list):
     """Generic helper to send an Interactive List Message."""
+    interactive_obj = {
+        "type": "list",
+        "body": {"text": body},
+        "action": {"button": button, "sections": sections}
+    }
+    if header:
+        interactive_obj["header"] = {"type": "text", "text": header}
+    if footer:
+        interactive_obj["footer"] = {"text": footer}
+
     payload = {
         "messaging_product": "whatsapp",
         "to": to,
         "type": "interactive",
-        "interactive": {
-            "type": "list",
-            "header": {"type": "text", "text": header},
-            "body": {"text": body},
-            "footer": {"text": footer},
-            "action": {"button": button, "sections": sections}
-        }
+        "interactive": interactive_obj
     }
     try:
         response = requests.post(WHATSAPP_API_URL, headers=_api_headers(), json=payload)
@@ -198,6 +223,10 @@ LANGUAGE_CONFIRMATIONS = {
 
 def send_language_selection(to: str):
     """Send language chooser list."""
+    # Send the CERC logo first
+    logo_url = f"{request.host_url}static/cerc_logo.png"
+    send_image_message(to, logo_url)
+
     rows = [
         {"id": "lang_english", "title": "English"},
         {"id": "lang_hindi", "title": "हिन्दी"},
@@ -206,13 +235,88 @@ def send_language_selection(to: str):
     ]
     send_interactive_list(
         to,
-        header="Welcome! 🙏",
-        body="Welcome to CERC Support Service.\n\nPlease choose your preferred language:",
-        footer="Tap the button below ↓",
+        header="",
+        body="Welcome to CERC Complaints Desk\nWe are here to assist you with your Complaints\n\nPlease choose your preferred language to continue:",
+        footer="",
         button="Choose Language",
         sections=[{"title": "Languages", "rows": rows}]
     )
 
+
+PRODUCT_CATEGORIES = [
+    "Automobile", "Electrical Home Appliances", "Solar Panel",
+    "Mobile Handset & Electronics", "E- Commerce", "Weight, Size & Description"
+]
+SERVICE_CATEGORIES = [
+    "Airline", "Banking (Credit Card, Investments, and loans)", 
+    "Insurances (Life, Health, Travel, Motor, etc.)", "Internet, Mobile & telecom services", 
+    "Education", "Taxi, Bus, Railway", "Tour Packages (Tour, Vacation Club, and Hotel)",
+    "Real Estate", "Post & courier", "LPG & Gas", "Electricity Company", "Advocate & Court Procedure"
+]
+
+def send_main_category_menu(to: str, session: UserSession):
+    rows = [
+        {"id": "menu_product", "title": safe_truncate(translate_text("Product", session.lang), 24)},
+        {"id": "menu_service", "title": safe_truncate(translate_text("Service", session.lang), 24)},
+        {"id": "menu_choose", "title": safe_truncate(translate_text("Choose category", session.lang), 24)},
+        {"id": "cat_describe", "title": safe_truncate(translate_text("Directly file a complaint", session.lang), 24)},
+        {"id": "menu_back_lang", "title": safe_truncate(translate_text("Back", session.lang), 24)}
+    ]
+    send_interactive_list(
+        to,
+        header="",
+        body=translate_text("Select Categories:", session.lang),
+        footer="",
+        button=translate_text("Select Option", session.lang),
+        sections=[{"title": translate_text("Options", session.lang), "rows": rows}]
+    )
+
+def send_product_menu(to: str, session: UserSession):
+    rows = []
+    for cat in PRODUCT_CATEGORIES:
+        clean = cat.replace(" ", "_").replace("&", "n")[:20]
+        rows.append({"id": f"cat_{clean}", "title": safe_truncate(translate_text(cat, session.lang), 24)})
+    rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("Back", session.lang), 24)})
+    send_interactive_list(
+        to,
+        header="",
+        body=translate_text("Product Categories:", session.lang),
+        footer="",
+        button=translate_text("Select Product", session.lang),
+        sections=[{"title": translate_text("Products", session.lang), "rows": rows}]
+    )
+
+def send_service_menu(to: str, session: UserSession, page: int = 0):
+    page_size = 7
+    start = page * page_size
+    end = start + page_size
+    page_cats = SERVICE_CATEGORIES[start:end]
+    
+    rows = []
+    for cat in page_cats:
+        clean = cat.replace(" ", "_").replace("&", "n")[:20]
+        rows.append({"id": f"cat_{clean}", "title": safe_truncate(translate_text(cat, session.lang), 24)})
+    
+    opt_rows = []
+    if page > 0:
+        opt_rows.append({"id": f"serv_page_{page-1}", "title": safe_truncate(translate_text("⬅️ Previous", session.lang), 24)})
+    if end < len(SERVICE_CATEGORIES):
+        opt_rows.append({"id": f"serv_page_{page+1}", "title": safe_truncate(translate_text("➡️ Next Options", session.lang), 24)})
+    
+    opt_rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("Back", session.lang), 24)})
+    
+    sections = [{"title": translate_text("Services", session.lang), "rows": rows}]
+    if opt_rows:
+        sections.append({"title": translate_text("Navigation", session.lang), "rows": opt_rows})
+
+    send_interactive_list(
+        to,
+        header="",
+        body=translate_text("Service Categories:", session.lang),
+        footer="",
+        button=translate_text("Select Service", session.lang),
+        sections=sections
+    )
 
 # ── Category Menu & Pagination ───────────────────────────────────────────
 def send_category_menu(to: str, session: UserSession, page: int = 0):
@@ -390,9 +494,9 @@ def send_faq_list(to: str, category: str, session: UserSession):
 # ── Data Collection Prompts ─────────────────────────────────────────────
 COLLECTION_PROMPTS = {
     COLLECT_USER_NAME: "👤 Please enter your full name:",
-    COLLECT_USER_DISTRICT: "📍 Which district do you belong to?",
-    COLLECT_USER_TALUKA: "🏘️ Which taluka do you belong to?",
-    COLLECT_USER_VILLAGE: "🏡 What is your village/city name?",
+    COLLECT_USER_STATE: "📍 Which State do you belong to?",
+    COLLECT_USER_OTHER_STATE: "📍 Please enter the name of your State:",
+    COLLECT_USER_VILLAGE: "🏡 What is your city/village/Town name?",
     COLLECT_USER_CONTACT: "📞 Please enter your contact number:",
     COLLECT_USER_EMAIL: "📧 Please enter your email address:",
     COLLECT_DESCRIPTION: "📝 Please describe your complaint in detail:",
@@ -415,6 +519,23 @@ def send_skip_button_prompt(to: str, prompt_text: str, skip_id: str, session: Us
 def send_collection_prompt(to: str, state: str, session: UserSession):
     """Send the data collection prompt for the current state."""
     prompt = COLLECTION_PROMPTS.get(state, "Please provide the details:")
+    if state == COLLECT_USER_STATE:
+        rows = [
+            {"id": "state_Gujarat", "title": "Gujarat"},
+            {"id": "state_Maharashtra", "title": "Maharashtra"},
+            {"id": "state_Rajasthan", "title": "Rajasthan"},
+            {"id": "state_Other", "title": "Other State"},
+        ]
+        send_interactive_list(
+            to,
+            header="",
+            body=translate_text(prompt, session.lang),
+            footer="",
+            button=translate_text("Choose State", session.lang),
+            sections=[{"title": translate_text("States", session.lang), "rows": rows}]
+        )
+        return
+
     # For skippable opposite party fields, show a Skip button
     if state == COLLECT_OPPOSITE_PHONE:
         send_skip_button_prompt(to, prompt, "skip_opp_phone", session)
@@ -579,16 +700,11 @@ def handle_text(sender: str, text: str, session: UserSession):
     # ── Data Collection States ──────────────────────────────────────
     elif state == COLLECT_USER_NAME:
         session.user_name = text
-        session.state = COLLECT_USER_DISTRICT
-        send_collection_prompt(sender, COLLECT_USER_DISTRICT, session)
+        session.state = COLLECT_USER_STATE
+        send_collection_prompt(sender, COLLECT_USER_STATE, session)
 
-    elif state == COLLECT_USER_DISTRICT:
-        session.user_district = text
-        session.state = COLLECT_USER_TALUKA
-        send_collection_prompt(sender, COLLECT_USER_TALUKA, session)
-
-    elif state == COLLECT_USER_TALUKA:
-        session.user_taluka = text
+    elif state == COLLECT_USER_OTHER_STATE:
+        session.user_state = text
         session.state = COLLECT_USER_VILLAGE
         send_collection_prompt(sender, COLLECT_USER_VILLAGE, session)
 
@@ -604,8 +720,8 @@ def handle_text(sender: str, text: str, session: UserSession):
 
     elif state == COLLECT_USER_EMAIL:
         session.user_email = text
-        session.state = CATEGORY_MENU
-        send_category_menu(sender, session)
+        session.state = MAIN_CATEGORY_MENU
+        send_main_category_menu(sender, session)
 
     elif state == COLLECT_DESCRIPTION:
         session.complaint_description = text
@@ -649,10 +765,8 @@ def handle_text(sender: str, text: str, session: UserSession):
         field = session.edit_field
         if field == "edit_user_name":
             session.user_name = text
-        elif field == "edit_user_district":
-            session.user_district = text
-        elif field == "edit_user_taluka":
-            session.user_taluka = text
+        elif field == "edit_user_state":
+            session.user_state = text
         elif field == "edit_user_village":
             session.user_village = text
         elif field == "edit_user_contact":
@@ -703,6 +817,48 @@ def handle_interactive(sender: str, selected_id: str, selected_title: str,
         send_whatsapp_message(sender, translate_text(confirmation, session.lang))
         session.state = COLLECT_USER_NAME
         send_collection_prompt(sender, COLLECT_USER_NAME, session)
+        return
+
+    # ── State Selection ─────────────────────────────────────────────
+    if selected_id.startswith("state_"):
+        if selected_id == "state_Other":
+            session.state = COLLECT_USER_OTHER_STATE
+            send_collection_prompt(sender, COLLECT_USER_OTHER_STATE, session)
+        else:
+            session.user_state = selected_title
+            session.state = COLLECT_USER_VILLAGE
+            send_collection_prompt(sender, COLLECT_USER_VILLAGE, session)
+        return
+
+    # ── Main Menu Selections ────────────────────────────────────────
+    if selected_id == "menu_product":
+        session.state = PRODUCT_MENU
+        send_product_menu(sender, session)
+        return
+
+    if selected_id == "menu_service":
+        session.state = SERVICE_MENU
+        send_service_menu(sender, session)
+        return
+
+    if selected_id == "menu_choose":
+        session.state = CATEGORY_MENU
+        send_category_menu(sender, session)
+        return
+
+    if selected_id == "menu_back_lang":
+        reset_session(sender)
+        send_language_selection(sender)
+        return
+
+    if selected_id == "menu_back_main":
+        session.state = MAIN_CATEGORY_MENU
+        send_main_category_menu(sender, session)
+        return
+
+    if selected_id.startswith("serv_page_"):
+        page = int(selected_id.split("_")[-1])
+        send_service_menu(sender, session, page=page)
         return
 
     # ── Category Selection ──────────────────────────────────────────
@@ -866,9 +1022,8 @@ def handle_interactive(sender: str, selected_id: str, selected_title: str,
 
         field_prompts = {
             "edit_user_name": "👤 Enter your new name:",
-            "edit_user_district": "📍 Enter your new district:",
-            "edit_user_taluka": "🏘️ Enter your new taluka:",
-            "edit_user_village": "🏡 Enter your new village/city:",
+            "edit_user_state": "📍 Enter your new state:",
+            "edit_user_village": "🏡 Enter your new city/village/town name:",
             "edit_user_contact": "📞 Enter your new contact number:",
             "edit_user_email": "📧 Enter your new email address:",
             "edit_desc": "📝 Enter the new complaint description:",

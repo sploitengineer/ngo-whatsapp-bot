@@ -9,11 +9,14 @@ from datetime import datetime
 # ── State Constants ─────────────────────────────────────────────────────
 LANG_SELECT = "LANG_SELECT"
 COLLECT_USER_NAME = "COLLECT_USER_NAME"
-COLLECT_USER_DISTRICT = "COLLECT_USER_DISTRICT"
-COLLECT_USER_TALUKA = "COLLECT_USER_TALUKA"
+COLLECT_USER_STATE = "COLLECT_USER_STATE"
+COLLECT_USER_OTHER_STATE = "COLLECT_USER_OTHER_STATE"
 COLLECT_USER_VILLAGE = "COLLECT_USER_VILLAGE"
 COLLECT_USER_CONTACT = "COLLECT_USER_CONTACT"
 COLLECT_USER_EMAIL = "COLLECT_USER_EMAIL"
+MAIN_CATEGORY_MENU = "MAIN_CATEGORY_MENU"
+PRODUCT_MENU = "PRODUCT_MENU"
+SERVICE_MENU = "SERVICE_MENU"
 CATEGORY_MENU = "CATEGORY_MENU"
 AWAITING_AI_INPUT = "AWAITING_AI_INPUT"
 FAQ_LIST = "FAQ_LIST"
@@ -41,8 +44,7 @@ class UserSession:
 
         # Personal details
         self.user_name = None
-        self.user_district = None
-        self.user_taluka = None
+        self.user_state = None
         self.user_village = None
         self.user_contact = None
         self.user_email = None
@@ -84,9 +86,8 @@ class UserSession:
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"👤 *Your Details:*\n"
             f"   Name: {self.user_name}\n"
-            f"   District: {self.user_district}\n"
-            f"   Taluka: {self.user_taluka}\n"
-            f"   Village/City: {self.user_village}\n"
+            f"   State: {self.user_state}\n"
+            f"   City/Village/Town: {self.user_village}\n"
             f"   Contact: {self.user_contact}\n"
             f"   Email: {self.user_email}\n\n"
             f"🗂 *Category:* {self.category}\n"
@@ -107,9 +108,8 @@ class UserSession:
         """Return list of fields that can be edited."""
         return [
             ("edit_user_name", "Your Name"),
-            ("edit_user_district", "Your District"),
-            ("edit_user_taluka", "Your Taluka"),
-            ("edit_user_village", "Your Village/City"),
+            ("edit_user_state", "Your State"),
+            ("edit_user_village", "Your City/Village/Town"),
             ("edit_user_contact", "Your Contact Info"),
             ("edit_user_email", "Your Email"),
             ("edit_desc", "Complaint Description"),

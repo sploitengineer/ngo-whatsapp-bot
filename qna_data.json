@@ -888,5 +888,75 @@
     "category": "Weights & Measures",
     "question": "What documents should be kept for complaint?",
     "answer": "Cash memo / Bill\nPhoto of product\nPhoto of weighing machine (if applicable)\nPayment proof\nWritten complaint copy"
+  },
+  {
+    "category": "Solar Panel",
+    "question": "Poor Installation or Defective Equipment",
+    "answer": "If the solar panels, inverter, or wiring are defective or improperly installed, you are entitled to proper repair, replacement, or rectification without additional cost, as per warranty terms and consumer protection laws."
+  },
+  {
+    "category": "Solar Panel",
+    "question": "Lower Electricity Generation than Promised",
+    "answer": "If the system is not generating the promised units or savings, you may request a performance audit report from the company and claim compensation if there is a deficiency in service or misrepresentation."
+  },
+  {
+    "category": "Solar Panel",
+    "question": "False Promises or Misleading Information",
+    "answer": "In case of false assurances regarding subsidy, savings, or warranty, such acts may amount to unfair trade practice. You may demand correction, refund, or compensation."
+  },
+  {
+    "category": "Solar Panel",
+    "question": "Delay in Installation or After-Sales Service",
+    "answer": "Unreasonable delay in installation or lack of service support is considered a deficiency in service. You are entitled to timely completion and proper after-sales support."
+  },
+  {
+    "category": "Solar Panel",
+    "question": "Non-Issuance of Bill or Warranty Documents",
+    "answer": "Unreasonable delay in installation or lack of service support is considered a deficiency in service. You are entitled to timely completion and proper after-sales support."
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Insurance companies reject claims or take excessive time to process them.",
+    "answer": "You may request a written explanation for the rejection or delay. If unsatisfied, you can escalate the matter to the insurer’s grievance cell and further to the Insurance Regulatory and Development Authority of India (IRDAI)."
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Policy sold with false promises (high returns, full coverage, wrong benefits).",
+    "answer": "If you were misled, you can file a complaint within the \"free-look period\" (usually 15 days). If this period has passed, you may still raise a grievance citing misrepresentation."
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Claims rejected alleging that the policyholder did not disclose medical history or facts.",
+    "answer": "Ensure you had disclosed all material facts at the time of purchase. If you believe the rejection is unfair, submit supporting documents and escalate the complaint."
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Delay in receiving policy documents, bond, or soft copy.",
+    "answer": "You are entitled to receive policy documents within a reasonable time. Follow up with the insurer and lodge a formal complaint if delayed."
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Premium paid but not updated , Policy lapsed without proper notice",
+    "answer": "Share payment proof with the insurer immediately. If unresolved, escalate to higher authorities or contact consumer organisation."
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Insurance company pays less than the claimed amount.",
+    "answer": "Ask for a detailed settlement calculation. If discrepancies exist, file a grievance. Contact Consumer Organisation or File a complaint before the District Consumer Disputes Redressal Commission under the Consumer Protection Act, 2019"
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Cashless facility denied at hospital.",
+    "answer": "You may proceed with reimbursement claim and later challenge the denial with proper documents."
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Insurance company delays payout after policy maturity.",
+    "answer": "Submit a written complaint with policy details and demand payment with applicable interest for delay. If claim was not settled contact consumer organisation and file case against insurance Company"
+  },
+  {
+    "category": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "question": "Problems in cancelling policy or receiving refund.",
+    "answer": "Ensure cancellation request is in writing. If refund is delayed, file consumer complaint in District Consumer Redressal Commission."
   }
 ]
