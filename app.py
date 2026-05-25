@@ -112,15 +112,21 @@ def send_image_message(to: str, image_url: str):
 
 
 def send_interactive_list(to: str, header: str, body: str, footer: str,
-                          button: str, sections: list):
+                          button: str, sections: list, header_image_url: str = None):
     """Generic helper to send an Interactive List Message."""
     interactive_obj = {
         "type": "list",
         "body": {"text": body},
         "action": {"button": button, "sections": sections}
     }
-    if header:
+    if header_image_url:
+        interactive_obj["header"] = {
+            "type": "image",
+            "image": {"link": header_image_url}
+        }
+    elif header:
         interactive_obj["header"] = {"type": "text", "text": header}
+    
     if footer:
         interactive_obj["footer"] = {"text": footer}
 
@@ -224,9 +230,7 @@ LANGUAGE_CONFIRMATIONS = {
 
 def send_language_selection(to: str):
     """Send language chooser list."""
-    # Send the CERC logo first
     logo_url = f"{request.host_url}static/cerc_logo.png"
-    send_image_message(to, logo_url)
 
     rows = [
         {"id": "lang_english", "title": "English"},
@@ -234,13 +238,17 @@ def send_language_selection(to: str):
         {"id": "lang_gujarati", "title": "ગુજરાતી"},
         {"id": "lang_marathi", "title": "मराठी"},
     ]
+    
+    body_text = "*Welcome to CERC Complaints Desk*\n\nWe are here to assist you with your Complaints\n\nPlease choose your preferred language to continue:"
+    
     send_interactive_list(
         to,
         header="",
-        body="Welcome to CERC Complaints Desk\nWe are here to assist you with your Complaints\n\nPlease choose your preferred language to continue:",
+        body=body_text,
         footer="",
         button="Choose Language",
-        sections=[{"title": "Languages", "rows": rows}]
+        sections=[{"title": "Languages", "rows": rows}],
+        header_image_url=logo_url
     )
 
 
