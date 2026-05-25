@@ -112,19 +112,14 @@ def send_image_message(to: str, image_url: str):
 
 
 def send_interactive_list(to: str, header: str, body: str, footer: str,
-                          button: str, sections: list, header_image_url: str = None):
+                          button: str, sections: list):
     """Generic helper to send an Interactive List Message."""
     interactive_obj = {
         "type": "list",
         "body": {"text": body},
         "action": {"button": button, "sections": sections}
     }
-    if header_image_url:
-        interactive_obj["header"] = {
-            "type": "image",
-            "image": {"link": header_image_url}
-        }
-    elif header:
+    if header:
         interactive_obj["header"] = {"type": "text", "text": header}
     
     if footer:
@@ -231,6 +226,7 @@ LANGUAGE_CONFIRMATIONS = {
 def send_language_selection(to: str):
     """Send language chooser list."""
     logo_url = f"{request.host_url}static/cerc_logo.png"
+    send_image_message(to, logo_url)
 
     rows = [
         {"id": "lang_english", "title": "English"},
@@ -247,8 +243,7 @@ def send_language_selection(to: str):
         body=body_text,
         footer="",
         button="Choose Language",
-        sections=[{"title": "Languages", "rows": rows}],
-        header_image_url=logo_url
+        sections=[{"title": "Languages", "rows": rows}]
     )
 
 
