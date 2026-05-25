@@ -233,6 +233,9 @@ def send_language_selection(to: str):
     caption_text = "*Welcome to CERC Complaints Desk*\nWe are here to assist you with your Complaints"
     send_image_message(to, logo_url, caption=caption_text)
 
+    # Delay to ensure the heavier image message is delivered first by WhatsApp
+    time.sleep(1)
+
     rows = [
         {"id": "lang_english", "title": "English"},
         {"id": "lang_hindi", "title": "हिन्दी"},
