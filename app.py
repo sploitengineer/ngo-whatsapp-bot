@@ -511,7 +511,6 @@ def send_faq_list(to: str, category: str, session: UserSession):
 COLLECTION_PROMPTS = {
     COLLECT_USER_NAME: "👤 Please enter your full name:",
     COLLECT_USER_STATE: "📍 Which State do you belong to?",
-    COLLECT_USER_OTHER_STATE: "📍 Please enter the name of your State:",
     COLLECT_USER_VILLAGE: "🏡 What is your city/village/Town name?",
     COLLECT_USER_CONTACT: "📞 Please enter your contact number:",
     COLLECT_USER_EMAIL: "📧 Please enter your email address:",
