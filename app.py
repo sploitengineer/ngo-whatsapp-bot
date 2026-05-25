@@ -295,7 +295,8 @@ def send_product_menu(to: str, session: UserSession):
     for cat in PRODUCT_CATEGORIES:
         clean = cat.replace(" ", "_").replace("&", "n")[:20]
         rows.append({"id": f"cat_{clean}", "title": safe_truncate(translate_text(cat, session.lang), 24)})
-    rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("Back", session.lang), 24)})
+    rows.append({"id": "cat_describe", "title": safe_truncate(translate_text("📝 File Complaint", session.lang), 24)})
+    rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("🔙 Main Menu", session.lang), 24)})
     send_interactive_list(
         to,
         header="",
@@ -322,7 +323,8 @@ def send_service_menu(to: str, session: UserSession, page: int = 0):
     if end < len(SERVICE_CATEGORIES):
         opt_rows.append({"id": f"serv_page_{page+1}", "title": safe_truncate(translate_text("➡️ Next Options", session.lang), 24)})
     
-    opt_rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("Back", session.lang), 24)})
+    opt_rows.append({"id": "cat_describe", "title": safe_truncate(translate_text("📝 File Complaint", session.lang), 24)})
+    opt_rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("🔙 Main Menu", session.lang), 24)})
     
     sections = [{"title": translate_text("Services", session.lang), "rows": rows}]
     if opt_rows:
