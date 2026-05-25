@@ -20,8 +20,8 @@ from complaint_data import CATEGORIES, CATEGORY_QUESTIONS, get_dummy_answer, get
 from state_machine import (
     get_session, reset_session, UserSession,
     LANG_SELECT, CATEGORY_MENU, MAIN_CATEGORY_MENU, PRODUCT_MENU, SERVICE_MENU,
-    AWAITING_AI_INPUT, FAQ_LIST, FAQ_ANSWER,
-    COLLECT_USER_NAME, COLLECT_USER_STATE, COLLECT_USER_OTHER_STATE,
+    AWAITING_AI_INPUT, FAQ_LIST, FAQ_ANSWER, MORE_OPTIONS_MENU,
+    COLLECT_USER_NAME, COLLECT_USER_STATE,
     COLLECT_USER_VILLAGE, COLLECT_USER_CONTACT, COLLECT_USER_EMAIL,
     COLLECT_DESCRIPTION, COLLECT_OPPOSITE_NAME, COLLECT_OPPOSITE_ADDRESS,
     COLLECT_OPPOSITE_PHONE, COLLECT_OPPOSITE_EMAIL, COLLECT_MONETARY,
@@ -264,20 +264,27 @@ SERVICE_CATEGORIES = [
 ]
 
 def send_main_category_menu(to: str, session: UserSession):
-    rows = [
-        {"id": "menu_product", "title": safe_truncate(translate_text("Product", session.lang), 24)},
-        {"id": "menu_service", "title": safe_truncate(translate_text("Service", session.lang), 24)},
-        {"id": "menu_choose", "title": safe_truncate(translate_text("Choose category", session.lang), 24)},
-        {"id": "cat_describe", "title": safe_truncate(translate_text("Directly file a complaint", session.lang), 24)},
-        {"id": "menu_back_lang", "title": safe_truncate(translate_text("Back", session.lang), 24)}
+    buttons = [
+        ("menu_product", safe_truncate(translate_text("📦 Product", session.lang), 20)),
+        ("menu_service", safe_truncate(translate_text("🛠️ Service", session.lang), 20)),
+        ("menu_more", safe_truncate(translate_text("⚙️ More Options", session.lang), 20)),
     ]
-    send_interactive_list(
-        to,
-        header="",
-        body=translate_text("Select Categories:", session.lang),
-        footer="",
-        button=translate_text("Select Option", session.lang),
-        sections=[{"title": translate_text("Options", session.lang), "rows": rows}]
+    send_interactive_buttons(
+        to, 
+        translate_text("Select Categories:", session.lang), 
+        buttons
+    )
+
+def send_more_options_menu(to: str, session: UserSession):
+    buttons = [
+        ("menu_choose", safe_truncate(translate_text("📂 All Categories", session.lang), 20)),
+        ("cat_describe", safe_truncate(translate_text("📝 File Complaint", session.lang), 20)),
+        ("menu_back_lang", safe_truncate(translate_text("🔙 Back", session.lang), 20)),
+    ]
+    send_interactive_buttons(
+        to, 
+        translate_text("More Options:", session.lang), 
+        buttons
     )
 
 def send_product_menu(to: str, session: UserSession):
@@ -528,23 +535,6 @@ def send_skip_button_prompt(to: str, prompt_text: str, skip_id: str, session: Us
 def send_collection_prompt(to: str, state: str, session: UserSession):
     """Send the data collection prompt for the current state."""
     prompt = COLLECTION_PROMPTS.get(state, "Please provide the details:")
-    if state == COLLECT_USER_STATE:
-        rows = [
-            {"id": "state_Gujarat", "title": "Gujarat"},
-            {"id": "state_Maharashtra", "title": "Maharashtra"},
-            {"id": "state_Rajasthan", "title": "Rajasthan"},
-            {"id": "state_Other", "title": "Other State"},
-        ]
-        send_interactive_list(
-            to,
-            header="",
-            body=translate_text(prompt, session.lang),
-            footer="",
-            button=translate_text("Choose State", session.lang),
-            sections=[{"title": translate_text("States", session.lang), "rows": rows}]
-        )
-        return
-
     # For skippable opposite party fields, show a Skip button
     if state == COLLECT_OPPOSITE_PHONE:
         send_skip_button_prompt(to, prompt, "skip_opp_phone", session)
@@ -712,7 +702,7 @@ def handle_text(sender: str, text: str, session: UserSession):
         session.state = COLLECT_USER_STATE
         send_collection_prompt(sender, COLLECT_USER_STATE, session)
 
-    elif state == COLLECT_USER_OTHER_STATE:
+    elif state == COLLECT_USER_STATE:
         session.user_state = text
         session.state = COLLECT_USER_VILLAGE
         send_collection_prompt(sender, COLLECT_USER_VILLAGE, session)
@@ -830,13 +820,9 @@ def handle_interactive(sender: str, selected_id: str, selected_title: str,
 
     # ── State Selection ─────────────────────────────────────────────
     if selected_id.startswith("state_"):
-        if selected_id == "state_Other":
-            session.state = COLLECT_USER_OTHER_STATE
-            send_collection_prompt(sender, COLLECT_USER_OTHER_STATE, session)
-        else:
-            session.user_state = selected_title
-            session.state = COLLECT_USER_VILLAGE
-            send_collection_prompt(sender, COLLECT_USER_VILLAGE, session)
+        session.user_state = selected_title
+        session.state = COLLECT_USER_VILLAGE
+        send_collection_prompt(sender, COLLECT_USER_VILLAGE, session)
         return
 
     # ── Main Menu Selections ────────────────────────────────────────
@@ -853,6 +839,11 @@ def handle_interactive(sender: str, selected_id: str, selected_title: str,
     if selected_id == "menu_choose":
         session.state = CATEGORY_MENU
         send_category_menu(sender, session)
+        return
+
+    if selected_id == "menu_more":
+        session.state = MORE_OPTIONS_MENU
+        send_more_options_menu(sender, session)
         return
 
     if selected_id == "menu_back_lang":
