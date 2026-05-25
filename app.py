@@ -90,13 +90,17 @@ def send_whatsapp_message(to: str, text: str):
         return None
 
 
-def send_image_message(to: str, image_url: str):
+def send_image_message(to: str, image_url: str, caption: str = None):
     """Send an image via WhatsApp API."""
+    image_obj = {"link": image_url}
+    if caption:
+        image_obj["caption"] = caption
+
     payload = {
         "messaging_product": "whatsapp",
         "to": to,
         "type": "image",
-        "image": {"link": image_url}
+        "image": image_obj
     }
     try:
         response = requests.post(WHATSAPP_API_URL, headers=_api_headers(), json=payload)
@@ -226,7 +230,8 @@ LANGUAGE_CONFIRMATIONS = {
 def send_language_selection(to: str):
     """Send language chooser list."""
     logo_url = f"{request.host_url}static/cerc_logo.png"
-    send_image_message(to, logo_url)
+    caption_text = "*Welcome to CERC Complaints Desk*\nWe are here to assist you with your Complaints"
+    send_image_message(to, logo_url, caption=caption_text)
 
     rows = [
         {"id": "lang_english", "title": "English"},
@@ -235,7 +240,7 @@ def send_language_selection(to: str):
         {"id": "lang_marathi", "title": "मराठी"},
     ]
     
-    body_text = "*Welcome to CERC Complaints Desk*\n\nWe are here to assist you with your Complaints\n\nPlease choose your preferred language to continue:"
+    body_text = "Please choose your preferred language to continue:"
     
     send_interactive_list(
         to,
