@@ -49,6 +49,12 @@ class UserSession:
         self.user_contact = None
         self.user_email = None
 
+        # Optional location fields (kept for legacy/compatibility with email + sheets exports).
+        # These are no longer collected via the chatbot, so they remain None and appear empty
+        # in the Excel sheet/email — but their presence prevents AttributeError downstream.
+        self.user_district = None
+        self.user_taluka = None
+
         # Complaint details
         self.complaint_description = None
         self.opposite_party_name = None

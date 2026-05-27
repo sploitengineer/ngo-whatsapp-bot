@@ -20,7 +20,7 @@ from complaint_data import CATEGORIES, CATEGORY_QUESTIONS, get_dummy_answer, get
 from state_machine import (
     get_session, reset_session, UserSession,
     LANG_SELECT, CATEGORY_MENU, MAIN_CATEGORY_MENU, PRODUCT_MENU, SERVICE_MENU,
-    AWAITING_AI_INPUT, FAQ_LIST, FAQ_ANSWER, MORE_OPTIONS_MENU,
+    AWAITING_AI_INPUT, FAQ_LIST, FAQ_ANSWER,
     COLLECT_USER_NAME, COLLECT_USER_STATE,
     COLLECT_USER_VILLAGE, COLLECT_USER_CONTACT, COLLECT_USER_EMAIL,
     COLLECT_DESCRIPTION, COLLECT_OPPOSITE_NAME, COLLECT_OPPOSITE_ADDRESS,
@@ -228,13 +228,30 @@ LANGUAGE_CONFIRMATIONS = {
 
 
 def send_language_selection(to: str):
-    """Send language chooser list."""
+    """Send greeting (image + caption) followed by the language chooser list.
+
+    WhatsApp delivers media messages noticeably slower than interactive
+    lists. If we fire the image and the list back-to-back, the lighter
+    list often arrives on the user's device first, making the greeting
+    appear after the language picker.
+
+    Sequence:
+      1. Send the logo image with the welcome caption (single message,
+         exactly like sending a photo + caption from the WhatsApp app).
+      2. Wait long enough for the image to finish delivering.
+      3. Send the language selection list.
+    """
     logo_url = f"{request.host_url}static/cerc_logo.png"
-    caption_text = "*Welcome to CERC Complaints Desk*\nWe are here to assist you with your Complaints"
+    caption_text = (
+        "👋 *Welcome to CERC Complaints Desk*\n"
+        "We are here to assist you with your Complaints"
+    )
+
+    # 1. Single image-with-caption message (greeting + logo together)
     send_image_message(to, logo_url, caption=caption_text)
 
-    # Delay to ensure the heavier image message is delivered first by WhatsApp
-    time.sleep(1)
+    # 2. Give WhatsApp enough time to deliver the heavier image first
+    time.sleep(3)
 
     rows = [
         {"id": "lang_english", "title": "English"},
@@ -242,9 +259,9 @@ def send_language_selection(to: str):
         {"id": "lang_gujarati", "title": "ગુજરાતી"},
         {"id": "lang_marathi", "title": "मराठी"},
     ]
-    
+
     body_text = "Please choose your preferred language to continue:"
-    
+
     send_interactive_list(
         to,
         header="",
@@ -266,11 +283,43 @@ SERVICE_CATEGORIES = [
     "Real Estate", "Post & courier", "LPG & Gas", "Electricity Company", "Advocate & Court Procedure"
 ]
 
+# Display label → canonical category name used in qna_data.json (CATEGORIES list)
+# This lets us show user-friendly names in Product/Service menus while still
+# pulling the correct FAQ questions/answers for that category.
+DISPLAY_TO_DATA_CATEGORY = {
+    # Products
+    "Automobile": "Vehicle",
+    "Electrical Home Appliances": "Electrical & Electronic App.",
+    "Solar Panel": "Solar Panel",
+    "Mobile Handset & Electronics": "Mobile Handset",
+    "E- Commerce": "E commerce",
+    "Weight, Size & Description": "Weights & Measures",
+    # Services
+    "Airline": "Airlines",
+    "Banking (Credit Card, Investments, and loans)": "Banking Services",
+    "Insurances (Life, Health, Travel, Motor, etc.)": "Insurances (Life, Health, Travel, Motor, etc.)",
+    "Internet, Mobile & telecom services": "Internet Services",
+    "Education": "Educational Institute",
+    "Taxi, Bus, Railway": "Railway",
+    "Tour Packages (Tour, Vacation Club, and Hotel)": "Transport Tours & Travels",
+    "Real Estate": "Housing/ Builder",
+    "Post & courier": "Postal Services",
+    "LPG & Gas": "LPG, PNG & Petrol",
+    "Electricity Company": "Electricity Boards",
+    "Advocate & Court Procedure": "Advocate",
+}
+
+
+def resolve_data_category(display_name: str) -> str:
+    """Map a UI/display category name to the canonical key in qna_data.json."""
+    return DISPLAY_TO_DATA_CATEGORY.get(display_name, display_name)
+
+
 def send_main_category_menu(to: str, session: UserSession):
     buttons = [
         ("menu_product", safe_truncate(translate_text("📦 Product", session.lang), 20)),
         ("menu_service", safe_truncate(translate_text("🛠️ Service", session.lang), 20)),
-        ("menu_more", safe_truncate(translate_text("⚙️ More Options", session.lang), 20)),
+        ("menu_direct_file", safe_truncate(translate_text("📝 File Complaint", session.lang), 20)),
     ]
     send_interactive_buttons(
         to, 
@@ -279,23 +328,20 @@ def send_main_category_menu(to: str, session: UserSession):
     )
 
 def send_more_options_menu(to: str, session: UserSession):
-    buttons = [
-        ("menu_choose", safe_truncate(translate_text("📂 All Categories", session.lang), 20)),
-        ("cat_describe", safe_truncate(translate_text("📝 File Complaint", session.lang), 20)),
-        ("menu_back_lang", safe_truncate(translate_text("🔙 Back", session.lang), 20)),
-    ]
-    send_interactive_buttons(
-        to, 
-        translate_text("More Options:", session.lang), 
-        buttons
-    )
+    """Deprecated: kept as a no-op for backwards compatibility.
+
+    The "More Options" submenu was removed in favor of a direct
+    "📝 File Complaint" entry on the main category menu. This stub is
+    retained so any stale interactive callbacks don't crash.
+    """
+    send_main_category_menu(to, session)
 
 def send_product_menu(to: str, session: UserSession):
     rows = []
     for cat in PRODUCT_CATEGORIES:
         clean = cat.replace(" ", "_").replace("&", "n")[:20]
         rows.append({"id": f"cat_{clean}", "title": safe_truncate(translate_text(cat, session.lang), 24)})
-    rows.append({"id": "cat_describe", "title": safe_truncate(translate_text("📝 File Complaint", session.lang), 24)})
+    rows.append({"id": "menu_direct_file", "title": safe_truncate(translate_text("📝 File Complaint", session.lang), 24)})
     rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("🔙 Main Menu", session.lang), 24)})
     send_interactive_list(
         to,
@@ -323,7 +369,7 @@ def send_service_menu(to: str, session: UserSession, page: int = 0):
     if end < len(SERVICE_CATEGORIES):
         opt_rows.append({"id": f"serv_page_{page+1}", "title": safe_truncate(translate_text("➡️ Next Options", session.lang), 24)})
     
-    opt_rows.append({"id": "cat_describe", "title": safe_truncate(translate_text("📝 File Complaint", session.lang), 24)})
+    opt_rows.append({"id": "menu_direct_file", "title": safe_truncate(translate_text("📝 File Complaint", session.lang), 24)})
     opt_rows.append({"id": "menu_back_main", "title": safe_truncate(translate_text("🔙 Main Menu", session.lang), 24)})
     
     sections = [{"title": translate_text("Services", session.lang), "rows": rows}]
@@ -583,14 +629,28 @@ def send_edit_field_list(to: str, session: UserSession):
 
 # ── Category ID Resolution ─────────────────────────────────────────────
 def resolve_category_from_id(selected_id: str) -> str:
-    """Convert a cat_XYZ interactive ID back to a category name."""
-    # Remove "cat_" prefix
-    cat_key = selected_id[4:]
-    # Try to match against CATEGORIES
+    """Convert a cat_XYZ interactive ID back to a (display) category name.
+
+    Looks first in the canonical CATEGORIES list (from qna_data.json), then
+    falls back to the Product/Service display labels so menu picks like
+    "Automobile" or "Airline" resolve correctly even though the FAQ data
+    uses different canonical names ("Vehicle", "Airlines", etc.).
+    """
+    cat_key = selected_id[4:]  # strip the "cat_" prefix
+
+    def _slug(name: str) -> str:
+        return name.replace(" ", "_").replace("&", "n")[:20]
+
+    # 1. Canonical FAQ categories
     for cat in CATEGORIES:
-        clean = cat.replace(" ", "_").replace("&", "n")[:20]
-        if clean == cat_key:
+        if _slug(cat) == cat_key:
             return cat
+
+    # 2. Product / Service display labels (mapped to FAQ category later)
+    for cat in PRODUCT_CATEGORIES + SERVICE_CATEGORIES:
+        if _slug(cat) == cat_key:
+            return cat
+
     return None
 
 
@@ -841,13 +901,24 @@ def handle_interactive(sender: str, selected_id: str, selected_title: str,
         return
 
     if selected_id == "menu_choose":
+        # Legacy id from the old "More Options → All Categories" path.
+        # Kept for backwards compatibility; just shows the full category list.
         session.state = CATEGORY_MENU
         send_category_menu(sender, session)
         return
 
     if selected_id == "menu_more":
-        session.state = MORE_OPTIONS_MENU
-        send_more_options_menu(sender, session)
+        # Legacy id from the removed More Options menu — fall back to main menu.
+        session.state = MAIN_CATEGORY_MENU
+        send_main_category_menu(sender, session)
+        return
+
+    if selected_id == "menu_direct_file":
+        # Direct "File a Complaint" path: skip category selection and AI matching.
+        # Category is recorded as "Open" so the ticket can be triaged manually.
+        session.category = "Open"
+        session.state = COLLECT_DESCRIPTION
+        send_collection_prompt(sender, COLLECT_DESCRIPTION, session)
         return
 
     if selected_id == "menu_back_lang":
@@ -889,10 +960,13 @@ def handle_interactive(sender: str, selected_id: str, selected_title: str,
     if selected_id.startswith("cat_"):
         category = resolve_category_from_id(selected_id)
         if category:
-            session.category = category
+            # Show friendly display name, but use canonical key for FAQ lookups
+            display_name = category
+            data_category = resolve_data_category(category)
+            session.category = data_category
             session.state = FAQ_LIST
-            send_whatsapp_message(sender, translate_text(f"📂 Category: *{category}*", session.lang))
-            send_faq_list(sender, category, session)
+            send_whatsapp_message(sender, translate_text(f"📂 Category: *{display_name}*", session.lang))
+            send_faq_list(sender, data_category, session)
         else:
             send_whatsapp_message(sender, translate_text(f"Category selected: *{selected_title}*", session.lang))
             session.category = selected_title
