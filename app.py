@@ -62,6 +62,64 @@ def is_duplicate(msg_id: str) -> bool:
     return False
 
 
+# ── Greeting → Language Selection Sequencing ────────────────────────────
+# WhatsApp delivers media (image) messages noticeably slower than
+# interactive lists. If we fire both back-to-back, the lighter list often
+# arrives first on the user's device, putting the language picker above
+# the welcome image.
+#
+# To order them deterministically we wait for the outgoing greeting image
+# to be acknowledged by WhatsApp (the `sent` or `delivered` status webhook
+# carries the same WAMID we received when posting the image). Only then do
+# we fire the language list. A safety timer guarantees we still send the
+# list if Meta never delivers a status (e.g. status webhooks disabled).
+PENDING_LANGUAGE_PROMPTS = {}      # wamid -> {"to": str, "fired": bool}
+PENDING_LANGUAGE_PROMPTS_LOCK = threading.Lock()
+LANGUAGE_PROMPT_FALLBACK_SECONDS = 8
+
+
+def _send_language_prompt_now(to: str):
+    """Send only the language picker (the greeting image is sent separately)."""
+    rows = [
+        {"id": "lang_english", "title": "English"},
+        {"id": "lang_hindi", "title": "हिन्दी"},
+        {"id": "lang_gujarati", "title": "ગુજરાતી"},
+        {"id": "lang_marathi", "title": "मराठी"},
+    ]
+    send_interactive_list(
+        to,
+        header="",
+        body="Please choose your preferred language to continue:",
+        footer="",
+        button="Choose Language",
+        sections=[{"title": "Languages", "rows": rows}]
+    )
+
+
+def _fire_language_prompt(wamid: str, reason: str):
+    """Send the language list exactly once for a pending greeting."""
+    with PENDING_LANGUAGE_PROMPTS_LOCK:
+        entry = PENDING_LANGUAGE_PROMPTS.get(wamid)
+        if not entry or entry.get("fired"):
+            return
+        entry["fired"] = True
+        to = entry["to"]
+    print(f"➡️ Sending language prompt for {to} (trigger: {reason})")
+    try:
+        _send_language_prompt_now(to)
+    finally:
+        with PENDING_LANGUAGE_PROMPTS_LOCK:
+            PENDING_LANGUAGE_PROMPTS.pop(wamid, None)
+
+
+def _schedule_language_fallback(wamid: str):
+    """Safety net: send the language prompt if no status webhook arrives."""
+    def _run():
+        time.sleep(LANGUAGE_PROMPT_FALLBACK_SECONDS)
+        _fire_language_prompt(wamid, reason="fallback timer")
+    threading.Thread(target=_run, daemon=True).start()
+
+
 # ── Shared helpers ──────────────────────────────────────────────────────
 def _api_headers():
     return {
@@ -228,18 +286,16 @@ LANGUAGE_CONFIRMATIONS = {
 
 
 def send_language_selection(to: str):
-    """Send greeting (image + caption) followed by the language chooser list.
+    """Send greeting (image + caption); language list fires once delivered.
 
-    WhatsApp delivers media messages noticeably slower than interactive
-    lists. If we fire the image and the list back-to-back, the lighter
-    list often arrives on the user's device first, making the greeting
-    appear after the language picker.
-
-    Sequence:
-      1. Send the logo image with the welcome caption (single message,
-         exactly like sending a photo + caption from the WhatsApp app).
-      2. Wait long enough for the image to finish delivering.
-      3. Send the language selection list.
+    Steps:
+      1. Send the logo image with a welcome caption (one WhatsApp message,
+         exactly like sharing a photo + caption from the app).
+      2. Capture the outgoing WAMID and register it as "pending greeting".
+      3. The webhook listens for the matching status update from Meta and
+         only then sends the language list (see `handle_webhook`).
+      4. A background fallback timer ensures the list still goes out if no
+         status webhook arrives.
     """
     logo_url = f"{request.host_url}static/cerc_logo.png"
     caption_text = (
@@ -247,29 +303,25 @@ def send_language_selection(to: str):
         "We are here to assist you with your Complaints"
     )
 
-    # 1. Single image-with-caption message (greeting + logo together)
-    send_image_message(to, logo_url, caption=caption_text)
+    resp = send_image_message(to, logo_url, caption=caption_text)
 
-    # 2. Give WhatsApp enough time to deliver the heavier image first
-    time.sleep(3)
+    # Try to grab the outgoing message id from the API response.
+    wamid = None
+    if isinstance(resp, dict):
+        msgs = resp.get("messages") or []
+        if msgs and isinstance(msgs[0], dict):
+            wamid = msgs[0].get("id")
 
-    rows = [
-        {"id": "lang_english", "title": "English"},
-        {"id": "lang_hindi", "title": "हिन्दी"},
-        {"id": "lang_gujarati", "title": "ગુજરાતી"},
-        {"id": "lang_marathi", "title": "मराठी"},
-    ]
-
-    body_text = "Please choose your preferred language to continue:"
-
-    send_interactive_list(
-        to,
-        header="",
-        body=body_text,
-        footer="",
-        button="Choose Language",
-        sections=[{"title": "Languages", "rows": rows}]
-    )
+    if wamid:
+        with PENDING_LANGUAGE_PROMPTS_LOCK:
+            PENDING_LANGUAGE_PROMPTS[wamid] = {"to": to, "fired": False}
+        _schedule_language_fallback(wamid)
+        print(f"⏳ Greeting sent to {to} as {wamid}; waiting for delivery status…")
+    else:
+        # Couldn't capture an id (e.g. image send failed). Send the list
+        # immediately so the user is not left hanging.
+        print(f"⚠️ No WAMID for greeting to {to}; sending language prompt now.")
+        _send_language_prompt_now(to)
 
 
 PRODUCT_CATEGORIES = [
@@ -518,36 +570,73 @@ def send_predicted_categories(to: str, predictions: list, session: UserSession):
 
 
 # ── FAQ Questions ───────────────────────────────────────────────────────
-def send_faq_list(to: str, category: str, session: UserSession):
-    """Send FAQ questions for a category as interactive list."""
-    questions = get_questions_for_category(category)
-    q_rows = []
+# WhatsApp interactive lists allow a hard maximum of 10 rows TOTAL across all
+# sections (per Meta docs: "list messages support up to 10 rows"). To keep
+# navigation consistent we always reserve room for:
+#   - "📝 Directly File a Complaint"        (always visible)
+#   - "🔙 Back"                              (always visible)
+#   - "⬅️ Previous"                          (when page > 0)
+#   - "➡️ Next"                              (when there are more pages)
+# Worst case = 2 actions + 2 nav rows = 4 reserved slots, so we cap questions
+# per page at 6 to stay within the 10-row limit on every page.
+FAQ_PAGE_SIZE = 6
 
-    for i, q in enumerate(questions[:10]):   # max 10 per section
+
+def send_faq_list(to: str, category: str, session: UserSession, page: int = 0):
+    """Send FAQ questions for a category as a paginated interactive list.
+
+    Always shows 'Directly File a Complaint' and 'Back', plus Prev/Next
+    navigation when more questions exist for the same category.
+    """
+    questions = get_questions_for_category(category)
+
+    total_pages = max(1, (len(questions) + FAQ_PAGE_SIZE - 1) // FAQ_PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    start = page * FAQ_PAGE_SIZE
+    end = start + FAQ_PAGE_SIZE
+    page_qs = questions[start:end]
+
+    q_rows = []
+    for i, q in enumerate(page_qs):
+        q_idx = start + i
         q_trans = translate_text(q, session.lang)
         q_rows.append({
-            "id": f"faq_{i}",
-            "title": f"FAQ {i+1}",
+            "id": f"faq_{q_idx}",
+            "title": f"FAQ {q_idx + 1}",
             "description": safe_truncate(q_trans, 72)
         })
 
-    opt_rows = [
-        {
-            "id": "faq_change_category",
-            "title": safe_truncate(translate_text("🔄 Start Over", session.lang), 24),
-            "description": safe_truncate(translate_text("Change language or category", session.lang), 72)
-        },
-        {
-            "id": "faq_file_complaint",
-            "title": safe_truncate(translate_text("📝 File a Complaint", session.lang), 24),
-            "description": safe_truncate(translate_text("My issue is different", session.lang), 72)
-        }
-    ]
+    opt_rows = []
+    if page > 0:
+        opt_rows.append({
+            "id": f"faq_page_{page - 1}",
+            "title": safe_truncate(translate_text("⬅️ Previous", session.lang), 24),
+            "description": safe_truncate(translate_text("Previous questions", session.lang), 72)
+        })
+    if end < len(questions):
+        opt_rows.append({
+            "id": f"faq_page_{page + 1}",
+            "title": safe_truncate(translate_text("➡️ Next", session.lang), 24),
+            "description": safe_truncate(translate_text("More questions", session.lang), 72)
+        })
+
+    # Always-visible actions
+    opt_rows.append({
+        "id": "faq_file_complaint",
+        "title": safe_truncate(translate_text("📝 Directly File a Complaint", session.lang), 24),
+        "description": safe_truncate(translate_text("My issue is different", session.lang), 72)
+    })
+    opt_rows.append({
+        "id": "faq_back",
+        "title": safe_truncate(translate_text("🔙 Back", session.lang), 24),
+        "description": safe_truncate(translate_text("Return to category menu", session.lang), 72)
+    })
 
     cat_t = translate_text(category, session.lang)
+    header_t = safe_truncate(f"{cat_t[:40]} FAQ ({page + 1}/{total_pages}) ❓", 60)
     send_interactive_list(
         to,
-        header=safe_truncate(f"{cat_t[:50]} FAQ ❓", 60),
+        header=header_t,
         body=safe_truncate(translate_text("Here are common questions for this category.\nSelect one for guidance, or choose an option below:", session.lang), 1024),
         footer=safe_truncate(translate_text("Select an option", session.lang), 60),
         button=safe_truncate(translate_text("View Options", session.lang), 20),
@@ -684,6 +773,21 @@ def handle_webhook():
         for entry in data.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
+
+                # ── Outbound status notifications ──────────────────
+                # Used to sequence the greeting image before the language
+                # list. We trigger the language prompt as soon as Meta
+                # confirms the greeting has been sent (or delivered).
+                for status in value.get("statuses", []):
+                    s_id = status.get("id")
+                    s_status = status.get("status")
+                    if s_id and s_status in ("sent", "delivered", "read"):
+                        with PENDING_LANGUAGE_PROMPTS_LOCK:
+                            is_pending = s_id in PENDING_LANGUAGE_PROMPTS
+                        if is_pending:
+                            print(f"📡 Greeting status '{s_status}' for {s_id}")
+                            _fire_language_prompt(s_id, reason=f"status:{s_status}")
+
                 messages = value.get("messages", [])
 
                 for message in messages:
@@ -976,20 +1080,29 @@ def handle_interactive(sender: str, selected_id: str, selected_title: str,
 
     # ── FAQ Question Selection ──────────────────────────────────────
     if selected_id == "faq_change_category":
-        reset_session(sender)
-        send_language_selection(sender)
+        # Legacy id from old FAQ list — fall back to "Back" behavior.
+        session.state = MAIN_CATEGORY_MENU
+        send_main_category_menu(sender, session)
+        return
+
+    if selected_id == "faq_back":
+        session.state = MAIN_CATEGORY_MENU
+        send_main_category_menu(sender, session)
+        return
+
+    if selected_id.startswith("faq_page_"):
+        page = int(selected_id.split("_")[-1])
+        send_faq_list(sender, session.category, session, page=page)
         return
 
     if selected_id == "faq_file_complaint":
+        # "Directly File a Complaint" from inside an FAQ list.
+        # Categorize as Open and skip straight to description collection,
+        # matching the main-menu Direct File flow.
+        session.category = "Open"
+        session.complaint_description = None
         session.state = COLLECT_DESCRIPTION
-        if session.complaint_description:
-            # Already have description from AI input
-            msg = f"📝 We have your description:\n_{session.complaint_description}_\n\nLet's collect more details."
-            send_whatsapp_message(sender, translate_text(msg, session.lang))
-            session.state = COLLECT_OPPOSITE_NAME
-            send_collection_prompt(sender, COLLECT_OPPOSITE_NAME, session)
-        else:
-            send_collection_prompt(sender, COLLECT_DESCRIPTION, session)
+        send_collection_prompt(sender, COLLECT_DESCRIPTION, session)
         return
 
     if selected_id.startswith("faq_"):
