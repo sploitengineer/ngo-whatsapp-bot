@@ -104,7 +104,7 @@ class UserSession:
             f"   Address: {self.opposite_party_address}\n"
             f"   Phone: {self.opposite_party_phone or 'N/A'}\n"
             f"   Email: {self.opposite_party_email or 'N/A'}\n\n"
-            f"💰 *Monetary Amount:* {self.monetary_amount or 'N/A'}\n"
+            f"💰 *Claim Amount:* {self.monetary_amount or 'N/A'}\n"
             f"📎 *Documents:* {docs_str}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Please review and confirm."
@@ -123,7 +123,7 @@ class UserSession:
             ("edit_opp_addr", "Opposite Party Address"),
             ("edit_opp_phone", "Opposite Party Phone"),
             ("edit_opp_email", "Opposite Party Email"),
-            ("edit_monetary", "Monetary Amount"),
+            ("edit_monetary", "Claim Amount"),
         ]
 
 
