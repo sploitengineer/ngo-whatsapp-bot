@@ -44,7 +44,7 @@ def append_complaint_to_sheet(sheet_name: str, session, ticket_id: str):
                 "District", "Taluka", "Village/City",
                 "Opposite Party Name", "Opposite Party Phone", 
                 "Opposite Party Email", "Opposite Party Address",
-                "Monetary Value",
+                "Claim Amount",
                 "Complaint Description",
                 "Documents Count"
             ]

@@ -147,7 +147,7 @@ def send_complaint_email(session) -> bool:
                 </tr>
             </table>
 
-            <h3 style="color: #2c3e50;">💰 Monetary Involvement</h3>
+            <h3 style="color: #2c3e50;">💰 Claim Amount</h3>
             <p>{session.monetary_amount or 'None specified'}</p>
 
             <h3 style="color: #2c3e50;">📎 Documents</h3>

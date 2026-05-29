@@ -659,7 +659,7 @@ COLLECTION_PROMPTS = {
     COLLECT_OPPOSITE_ADDRESS: "📍 What is the contact address of the opposite party?",
     COLLECT_OPPOSITE_PHONE: "📞 Phone number of the opposite party?",
     COLLECT_OPPOSITE_EMAIL: "📧 Email of the opposite party?",
-    COLLECT_MONETARY: "💰 Is there any monetary amount involved? (in ₹)",
+    COLLECT_MONETARY: "💰 Is there any claim amount involved? (in ₹)",
     COLLECT_DOCS: "📎 Upload supporting documents (photos, bills, PDFs).\nSend them now, or type *done* when finished.",
 }
 
